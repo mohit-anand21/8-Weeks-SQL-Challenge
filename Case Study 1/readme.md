@@ -4,9 +4,7 @@
   <img alt="GitHub issues" src="https://img.shields.io/github/issues/orkunaran/8weekSQLchallenge_week1">
  </a>
  
- <img src = 'https://badges.pufler.dev/visits/orkunaran/8weekSQLchallenge_week1'>
-<p>
-
+ 
 <img src = 'https://8weeksqlchallenge.com/images/case-study-designs/1.png' >
 <p>
 
@@ -14,7 +12,7 @@
 
 ## WEEK 1 - Danny's Dinner
 	
-This challenge needs us to determine customer movements with 10 different questions. You may find my approaches to these challenges below. But first let's summarize the challenge description. And you may find the source here in this [link](https://8weeksqlchallenge.com/case-study-1/).
+This challenge needs us to determine customer movements with 10 different questions. You may find my approaches to these challenges below. But first let's summarize the challenge description. You can find the link to the challenge [here](https://8weeksqlchallenge.com/case-study-1/).
 	
 	
 ## Challenge Description
@@ -35,167 +33,209 @@ You may find the .sql file that creates the tables in the repository (MySQL).
 You may find my solutions in MySQL and my intuition on them with some comments.  
 
 
-Question 1 : What is the total amount each customer spent at the restaurant?
+**Question-1 : What is the total amount each customer spent at the restaurant?**
 
-Solution: That was a starter challenge. I joined two tables; sales and menu. And returned customer_id and SUM of prices (aliased as money_spent) and grouped them by customer_id. 
+Code:
 	
 ``` sql
-SELECT customer_id, SUM(price) AS money_spent FROM sales 
-	JOIN menu ON menu.product_id = sales.product_id
-	GROUP BY customer_id
+SELECT
+    DISTINCT(customer_id),
+    SUM(price) AS total_spendings
+FROM sales s
+JOIN menu m 
+ON s.product_id = m.product_id
+GROUP BY customer_id
+ORDER BY customer_id;
 ```
+**Output**
+
+![1](https://user-images.githubusercontent.com/87641079/196190917-cb5463a5-7972-4da2-89d7-831ea3c06012.png)
 
 
-Question 2. How many days has each customer visited the restaurant?
+**Question-2. How many days has each customer visited the restaurant?**
 	
-Solution : I used DISTINCT() and COUNT() function here. Reasons are obvious; I needed to count the dates that the customers visited, but in case of avoiding duplicates in orders (visitors might had ordered 2 items in one day) I used DISTINCT() function. 
+Code:
 	
 	
 ``` sql
-SELECT customer_id, COUNT(DISTINCT(order_date)) FROM sales
-	GROUP BY customer_id
+SELECT
+    DISTINCT(customer_id),
+    COUNT(*) AS total_no_of_days_visited
+FROM sales
+GROUP BY customer_id;
 ```
+**Output**
 
-Question 3. What was the first item from the menu purchased by each customer?
+![2](https://user-images.githubusercontent.com/87641079/196192433-6ed9f5df-ef0e-401d-b722-21058ec9d3f5.png)
+
+**Question-3. What was the first item from the menu purchased by each customer?**
 	
-Solution: I used SELECT within SELECT operation here. The first SELECT is to choose unique customer_id, and product names from sales and menu tables. After that I added a condition WHERE order_date is equal to MINIMUM order_dates. There was a downside of that challenge: One customer ordered 2 items in the first day he/she visited; thus we cannot say which one of the two items is the first one cause we had no additional information such as time. But on the other hand, we might not need that also. 
+Code: 
 	
 ```sql
-SELECT DISTINCT(customer_id), product_name FROM sales s
-	JOIN menu m ON m.product_id = s.product_id
-	WHERE s.order_date = ANY (SELECT MIN(order_date) FROM sales GROUP BY customer_id)
+SELECT
+    customer_id,
+    product_name,
+    order_date
+FROM (
+  SELECT *, ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY order_date) rn
+  FROM sales s
+) r
+JOIN menu m 
+ON r.product_id = m.product_id
+WHERE rn = 1
+GROUP BY customer_id;
 ```
+**Output**
 
+![3](https://user-images.githubusercontent.com/87641079/196192522-c4ef5125-2c82-42d7-a099-34f56b33e4f9.png)
 
-Question 4. What is the most purchased item on the menu and how many times was it purchased by all customers?
+**Question-4. What is the most purchased item on the menu and how many times was it purchased by all customers?**
 	
-Solution: Another JOIN challenge; I joined two tables (sales and menu) on product_id. Grouped the table by product_name, sorted DESCending and LIMITed the output by 1 row for each product_name. 
+Code:  
 	
 ```sql
-SELECT  COUNT(product_name) AS count, product_name FROM sales s 
-	JOIN menu m ON s.product_id = m.product_id
-	GROUP BY product_name ORDER BY count DESC LIMIT 1
+SELECT
+    product_name,
+    COUNT(*) total_no_of_times_purchased
+FROM sales s
+JOIN menu m 
+ON s.product_id = m.product_id
+GROUP BY product_name
+ORDER BY total_no_of_times_purchased DESC
+LIMIT 1;
 ```
+**Output**
 
-Question 5. Which item was the most popular for each customer?
+![4](https://user-images.githubusercontent.com/87641079/196192581-c87b0645-8f1d-4ff9-8481-efd149f5eb2d.png)
+
+**Question-5. Which item was the most popular for each customer?**
 	
-Solution: I learnt DENSE_RANK and RANK functions here. So what I did was created a table named 'r' in which the customers ranked by their COUNT of bought products. After that, rest was easy; choose customer_id, productname  and count from 'r' where the ranks are equal to 1. 
+Code: 
 
 ```sql
 WITH r AS 
-	(SELECT s.customer_id,
-		m.product_name,
-		COUNT(s.product_id) as count,
-        DENSE_RANK() OVER (PARTITION BY s.customer_id ORDER BY COUNT(s.product_id) DESC) AS r
-	FROM menu m 
-	JOIN sales s 
-	ON s.product_id = m.product_id
-	GROUP BY s.customer_id, s.product_id, m.product_name) 
-SELECT customer_id, product_name, count
+(
+SELECT 
+    s.customer_id,
+    m.product_name,
+	COUNT(s.product_id) as count,
+	DENSE_RANK() OVER (PARTITION BY s.customer_id ORDER BY COUNT(s.product_id) DESC) AS r -- Inspired to use DENSE_RANK() function from Orkun Aran's code
+FROM menu m 
+JOIN sales s 
+ON s.product_id = m.product_id
+GROUP BY s.customer_id, s.product_id, m.product_name
+) 
+SELECT 
+	customer_id, 
+    product_name, 
+    count
 FROM r
-WHERE r = 1
+WHERE r = 1;
 ```
+**Output**
 
-Question 6. Which item was purchased first by the customer after they became a member?
+![5](https://user-images.githubusercontent.com/87641079/196192635-c3947b86-aa47-4eec-9516-53d977d76944.png)
+
+**Question-6. Which item was purchased first by the customer after they became a member?**
 	
-Solution: More practice on DENSE_RANK(); Created a ranks table in which customers ranked by their order date. After ordering, choosed order dates which are bigger or equal to membership date, and same as above choosed Ranks equal to 1. 
+Code: 
 
 ```sql
- WITH ranks AS
+WITH ranks AS
 (
-SELECT s.customer_id,
-       m.product_name,
-	DENSE_RANK() OVER (PARTITION BY s.customer_id ORDER BY s.order_date) AS ranks
+SELECT
+	s.customer_id,
+	m.product_name,
+    	DENSE_RANK() OVER (PARTITION BY s.customer_id ORDER BY s.order_date) AS ranks -- Inspired to use DENSE_RANK() function from Orkun Aran's code
 FROM sales s
 JOIN menu m ON s.product_id = m.product_id
-JOIN members AS mem
-ON mem.customer_id = s.customer_id
-WHERE s.order_date >= mem.join_date)
+JOIN members mbr
+ON mbr.customer_id = s.customer_id
+WHERE s.order_date >= mbr.join_date
+)
 SELECT * FROM ranks
-WHERE ranks = 1
+WHERE ranks = 1;
 ```
+**Output**
 
+![6](https://user-images.githubusercontent.com/87641079/196192686-ab25fb94-5e8d-4536-91c3-ff4fe874f79a.png)
 
-7. Which item was purchased just before the customer became a member? 
+**Question-7. Which item was purchased just before the customer became a member?**
 	
-Solution: Same as question 6, just changes order date lower than membershipdate. 
+Code: 
+
 ````sql
 WITH ranks AS
 (
-SELECT s.customer_id,
+SELECT 
+	s.customer_id,
 	s.order_date,
-       m.product_name,
-	DENSE_RANK() OVER (PARTITION BY s.customer_id ORDER BY s.order_date) AS ranks, mem.join_date
+	m.product_name,
+	DENSE_RANK() OVER (PARTITION BY customer_id ORDER BY order_date) AS ranks, 
+	mbr.join_date
 FROM sales s
 JOIN menu m ON s.product_id = m.product_id
-JOIN members AS mem
-ON mem.customer_id = s.customer_id
-WHERE s.order_date < mem.join_date)
+JOIN members mbr
+ON mbr.customer_id = s.customer_id
+WHERE s.order_date < mbr.join_date
+)
 SELECT * FROM ranks
-WHERE ranks = 1
+WHERE ranks = 1;
 ````
+**Output**
 
-8. What is the total items and amount spent for each member before they became a member?
+![7](https://user-images.githubusercontent.com/87641079/196192738-b1c1ed21-5baf-4048-942e-521b0557c74d.png)
 
-Solution: Joined 3 tables together and choosed order_date lower than joining date, and group by the customer_id.
+**Question-8. What is the total items and amount spent for each member before they became a member?**
+
+Code: 
 
 ````sql
-
-SELECT s.customer_id, 
-	count(s.product_id) AS total_items, 
-        SUM(price) AS money_spent
-FROM sales AS s
-JOIN menu AS m ON m.product_id = s.product_id
-JOIN members AS mem ON s.customer_id = mem.customer_id
-WHERE s.order_date < mem.join_date
-GROUP BY s.customer_id
+SELECT 
+	s.customer_id,
+	COUNT(s.product_id) AS total_items, 
+	SUM(price) AS spending
+FROM sales s
+JOIN menu m 
+ON m.product_id = s.product_id
+JOIN members mbr
+ON s.customer_id = mbr.customer_id
+WHERE s.order_date < mbr.join_date
+GROUP BY s.customer_id;
 ````
-	
-	
-Question 9. If each $1 spent equates to 10 points and sushi has a 2x points multiplier - how many points would each customer have?
-	
-Solution: A CASE WHEN challenge. I was aware of that function thanks to HackerRank. CASE WHEN function creates a table named 'points'. Points are calculated as mentioned as in the question. After that, points and sales tables were JOINed together, and selected SUM(points) which grouped by customer_id.
+**Output**
 
-
+![8](https://user-images.githubusercontent.com/87641079/196192776-f59841af-b161-41af-86ea-01a3bbaf21e3.png)
 	
+**Question-9. If each $1 spent equates to 10 points and sushi has a 2x points multiplier - how many points would each customer have?**
+	
+Code:
 	
 ````sql
-WITH points AS 
+WITH points AS
 (
 SELECT *,
-    CASE 
-    WHEN m.product_name = 'sushi' THEN price * 20
-    WHEN m.product_name != 'sushi' THEN price * 10
+	CASE
+	WHEN m.product_name = 'sushi' THEN price * 20
+	WHEN m.product_name != 'sushi' THEN price * 10
     END AS points
 FROM menu m
-    )
+)
 SELECT customer_id, SUM(points) AS points
 FROM sales s
 JOIN points p ON p.product_id = s.product_id
-GROUP BY s.customer_id
+GROUP BY s.customer_id;
 ````
 
-OR 
+**Output**
 
-````sql
-SELECT customer_id, SUM(points) AS points
-FROM
-(
-SELECT m.product_id,
-	s.customer_id,
-    CASE 
-    WHEN m.product_name = 'sushi' THEN price * 20
-    ELSE price * 10
-    END AS points
-FROM menu m 
-JOIN sales s ON m.product_id = s.product_id
-) AS t
-GROUP BY customer_id
-````
+![9](https://user-images.githubusercontent.com/87641079/196192873-f3ac7195-71ce-4950-8640-169b55966d99.png)
 
-Question 10. In the first week after a customer joins the program (including their join date) they earn 2x points on all items, not just sushi - how many points do customer A and B have at the end of January?
 
-Solution: A bit more complex than the ones before; first created 'points' table with column that gives that the order made how many days after becoming a member (first_week). After that wrote a CASE WHEN function calculates total_points according to description. Finally, get the 1st month with EXTRACT function and get month equal to 1. 
+**Question-10. In the first week after a customer joins the program (including their join date) they earn 2x points on all items, not just sushi - how many points do customer A and B have at the end of January?**
+
+Code:  
 
 ````sql
 SELECT customer_id, SUM(total_points)
@@ -203,35 +243,40 @@ FROM
 (WITH points AS
 (
 SELECT s.customer_id, 
-	(s.order_date - mem.join_date) AS first_week,
-        m.price,
-        m.product_name,
-        s.order_date
-    FROM sales s
-	JOIN menu m ON s.product_id = m.product_id
-	JOIN members AS mem
-	ON mem.customer_id = s.customer_id
-    )
+       (s.order_date - mem.join_date) AS first_week,
+       m.price,
+       m.product_name,
+       s.order_date
+FROM sales s
+JOIN menu m 
+ON s.product_id = m.product_id
+JOIN members AS mem
+ON mem.customer_id = s.customer_id
+)
 SELECT customer_id,
-		CASE 
-		WHEN first_week BETWEEN 0 AND 7 THEN price * 20
-        WHEN (first_week > 7 OR first_week < 0) AND product_name = 'sushi' THEN price * 20
-		WHEN (first_week > 7 OR first_week < 0) AND product_name != 'sushi' THEN price * 10
-        END AS total_points,
-        order_date
+       order_date,
+       CASE 
+       WHEN first_week BETWEEN 0 AND 7 THEN price * 20
+       WHEN (first_week > 7 OR first_week < 0) AND product_name = 'sushi' THEN price * 20
+       WHEN (first_week > 7 OR first_week < 0) AND product_name != 'sushi' THEN price * 10
+       END AS total_points
 FROM points
-WHERE EXTRACT(MONTH FROM order_date) = 1) as t
-GROUP BY customer_id
+WHERE EXTRACT(MONTH FROM order_date) = 1
+) as t
+GROUP BY customer_id;
 ````
-						       
-						       
-BONUS QUESTIONS
+**Output**
 
-Recreate the following table.
+![10](https://user-images.githubusercontent.com/87641079/196192929-04f5358e-884c-462f-aa3d-c5c6ca46cacf.png)
+						       
+##BONUS QUESTIONS
+
+**Recreate the following table.**
 						       
 ````sql
-SELECT s.customer_id,
-		s.order_date,
+SELECT 
+	s.customer_id,
+	s.order_date,
         m.product_name,
         m.price,
         CASE 
@@ -244,12 +289,14 @@ LEFT JOIN members mem ON mem.customer_id = s.customer_id
 ORDER BY customer_id, order_date, price DESC
 ````
 	
-Rank Members - fill non-members with null
+**Rank Members - fill non-members with null**
+
 ````sql
 WITH membership AS
 (
-SELECT s.customer_id,
-		s.order_date,
+SELECT 
+	s.customer_id,
+	s.order_date,
         m.product_name,
         m.price,
         CASE 
